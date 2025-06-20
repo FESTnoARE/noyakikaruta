@@ -6,7 +6,7 @@
 ## 技術スタック
 - フレームワーク：Streamlit
 - バックエンド：Python 3.8+
-- データベース：Turso (via st-turso)
+- データベース：Turso (via sqlalchemy-libsql)
 - デプロイ：Streamlit Cloud
 - ホスティング：GitHub
 
@@ -54,7 +54,7 @@
 4. **シークレット設定**
    - Streamlit Cloudのアプリケーション管理画面で「Settings」>「Secrets」に以下の内容を貼り付けます。
    - `your_secure_password` は任意の管理者パスワードに置き換えてください。
-   - `url` と `authToken` には、上で取得したTursoの情報を設定します。
+   - **重要:** 取得したURLの末尾に `?authToken=取得した認証トークン` の形式で追記して、1つの `url` として設定してください。
 
    ```toml
    # .streamlit/secrets.toml
@@ -64,8 +64,7 @@
 
    # Tursoデータベース接続情報
    [connections.turso]
-   url = "libsql://your-database-name.turso.io"
-   authToken = "your-long-auth-token"
+   url = "libsql://your-database-name.turso.io?authToken=your-long-auth-token"
    ```
 
 ### プロジェクトディレクトリ構成

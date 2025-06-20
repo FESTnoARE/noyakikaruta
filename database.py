@@ -8,9 +8,9 @@ import pandas as pd
 @st.cache_resource
 def get_connection():
     """データベース接続を取得する"""
-    # st-tursoライブラリを使ってTursoデータベースに接続します
-    # これが最もシンプルで公式に推奨される方法です
-    return st.connection("turso")
+    # Streamlitの汎用SQL接続機能を使用し、Tursoデータベースに接続します。
+    # 接続情報は .streamlit/secrets.toml から自動的に読み込まれます。
+    return st.connection("turso", type="sql")
 
 # データベースのテーブルを初期化
 
