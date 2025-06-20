@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import sqlalchemy_libsql
 
 # StreamlitのConnection機能を利用してデータベース接続を管理
 # @st.cache_resourceデコレータで接続オブジェクトをキャッシュし、パフォーマンスを向上
