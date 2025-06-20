@@ -6,7 +6,7 @@
 ## 技術スタック
 - フレームワーク：Streamlit
 - バックエンド：Python 3.8+
-- データベース：PostgreSQL (via Streamlit Connection)
+- データベース：Turso (Cloud SQLite)
 - デプロイ：Streamlit Cloud
 - ホスティング：GitHub
 
@@ -48,10 +48,13 @@
 ### 2. Streamlit Cloud設定
 1. https://share.streamlit.io/ でデプロイ
 2. GitHubリポジトリと連携
-3. シークレット設定
-   - アプリケーション管理画面の「Settings」>「Secrets」に以下の内容を貼り付けます。
+3. **Tursoデータベースの準備**
+   1. [Turso](https://turso.tech/)にサインアップし、新しいデータベースを作成します。
+   2. データベースの管理画面で、**データベースURL**（`libsql://...`という形式）と**認証トークン**を取得します。
+4. **シークレット設定**
+   - Streamlit Cloudのアプリケーション管理画面で「Settings」>「Secrets」に以下の内容を貼り付けます。
    - `your_secure_password` は任意の管理者パスワードに置き換えてください。
-   - `[connections.postgresql]` の下には、ご自身で用意したPostgreSQLデータベースの接続情報を記述します。
+   - `url` と `authToken` には、上で取得したTursoの情報を設定します。
 
    ```toml
    # .streamlit/secrets.toml
@@ -59,14 +62,10 @@
    # 管理者パスワード
    ADMIN_PASSWORD = "your_secure_password"
 
-   # PostgreSQLデータベース接続情報
-   [connections.postgresql]
-   dialect = "postgresql"
-   host = "your_db_host"
-   port = 5432
-   database = "your_db_name"
-   username = "your_db_user"
-   password = "your_db_password"
+   # Tursoデータベース接続情報
+   [connections.turso]
+   url = "libsql://your-database-name.turso.io"
+   authToken = "your-long-auth-token"
    ```
 
 ### プロジェクトディレクトリ構成

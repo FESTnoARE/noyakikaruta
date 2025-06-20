@@ -8,7 +8,9 @@ import pandas as pd
 @st.cache_resource
 def get_connection():
     """データベース接続を取得する"""
-    return st.connection("postgresql", type="sql")
+    # Tursoデータベースに接続
+    # 接続情報はStreamlitのSecretsから自動で読み込まれる
+    return st.connection("turso", type="sql")
 
 # データベースのテーブルを初期化
 
@@ -18,12 +20,13 @@ def init_db():
     conn = get_connection()
     with conn.session as s:
         # "strings"テーブルが存在しない場合のみ作成
-        # idは自動採番される主キー、contentは必須、created_atはタイムゾーン付きの現在時刻がデフォルト
+        # SQLiteでは `SERIAL PRIMARY KEY` の代わりに `INTEGER PRIMARY KEY AUTOINCREMENT` を使用
+        # `TIMESTAMP WITH TIME ZONE` は `DATETIME` に変更
         s.execute('''
             CREATE TABLE IF NOT EXISTS strings (
-                id SERIAL PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT NOT NULL,
-                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         ''')
         s.commit()
@@ -36,8 +39,8 @@ def add_string(string_content: str):
     conn = get_connection()
     with conn.session as s:
         # パラメータ化クエリでSQLインジェクションを防止
-        s.execute('INSERT INTO strings (content) VALUES (:content)',
-                  params={"content": string_content})
+        s.execute('INSERT INTO strings (content) VALUES (?)',
+                  (string_content,))
         s.commit()
 
 # 複数の文字列をリストから一括で追加
@@ -67,7 +70,7 @@ def get_all_strings():
 def get_all_strings_random():
     """すべての文字列をランダムな順序で取得する"""
     conn = get_connection()
-    # PostgreSQLのRANDOM()関数でランダムな並び替えを実現
+    # SQLiteのRANDOM()関数でランダムな並び替えを実現
     df = conn.query('SELECT * FROM strings ORDER BY RANDOM();')
     return df
 
@@ -78,8 +81,7 @@ def delete_string(string_id: int):
     """指定されたIDの文字列を削除する"""
     conn = get_connection()
     with conn.session as s:
-        s.execute('DELETE FROM strings WHERE id = :id',
-                  params={"id": string_id})
+        s.execute('DELETE FROM strings WHERE id = ?', (string_id,))
         s.commit()
 
 # すべての文字列を削除
@@ -89,5 +91,8 @@ def delete_all_strings():
     """すべての文字列を削除する"""
     conn = get_connection()
     with conn.session as s:
-        s.execute('TRUNCATE TABLE strings;')
+        # SQLiteではTRUNCATE TABLEの代わりにDELETE FROMを使用
+        s.execute('DELETE FROM strings;')
+        # VACUUMで空き領域を解放（任意）
+        s.execute('VACUUM;')
         s.commit()
