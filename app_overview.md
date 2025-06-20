@@ -6,7 +6,7 @@
 ## 技術スタック
 - フレームワーク：Streamlit
 - バックエンド：Python 3.8+
-- データベース：SQLite
+- データベース：PostgreSQL (via Streamlit Connection)
 - デプロイ：Streamlit Cloud
 - ホスティング：GitHub
 
@@ -49,26 +49,40 @@
 1. https://share.streamlit.io/ でデプロイ
 2. GitHubリポジトリと連携
 3. シークレット設定
+   - アプリケーション管理画面の「Settings」>「Secrets」に以下の内容を貼り付けます。
+   - `your_secure_password` は任意の管理者パスワードに置き換えてください。
+   - `[connections.postgresql]` の下には、ご自身で用意したPostgreSQLデータベースの接続情報を記述します。
+
    ```toml
    # .streamlit/secrets.toml
+
+   # 管理者パスワード
    ADMIN_PASSWORD = "your_secure_password"
+
+   # PostgreSQLデータベース接続情報
+   [connections.postgresql]
+   dialect = "postgresql"
+   host = "your_db_host"
+   port = 5432
+   database = "your_db_name"
+   username = "your_db_user"
+   password = "your_db_password"
    ```
 
 ### プロジェクトディレクトリ構成
 ```
 noyakikaruta/
 ├── app.py              # メインアプリケーション
-├── config.example.py   # 設定ファイルテンプレート
-├── config.py          # 実際の設定ファイル（非公開）
+├── database.py         # データベース操作モジュール
 ├── requirements.txt    # 依存パッケージ
 ├── .gitignore         # Git除外設定
-└── data/
-    └── karuta.db     # SQLiteデータベース
+└── .streamlit/
+    └── secrets.toml    # (Streamlit Cloud上で管理)
 ```
 
 ### セキュリティ対策
 1. 設定管理
-   - 機密情報はStreamlit Cloudのシークレットで管理
+   - 機密情報（DB接続情報、管理者パスワード）はStreamlit Cloudのシークレットで管理
    - 設定ファイルのテンプレート化
 
 2. アクセス制御
@@ -76,8 +90,8 @@ noyakikaruta/
    - 文字列登録・削除の権限管理
 
 3. データ保護
-   - SQLiteデータベースのGit除外
-   - 設定ファイルのGit除外
+   - データベースへの直接アクセスを制限
+   - 機密情報をコードから分離
 
 ### 今後の改善点
 1. 機能追加

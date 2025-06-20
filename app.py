@@ -7,30 +7,21 @@
 # 標準ライブラリ
 import hashlib
 import io
-import os
-import random
-import sqlite3
+# os, sqlite3 は不要なので削除
 
 # サードパーティライブラリ
 import pandas as pd
 import streamlit as st
 
-# 設定ファイルの読み込み
+# データベースモジュールのインポート
+import database as db
+
+# 設定はst.secretsから直接読み込む
 try:
-    # Streamlit Cloudの場合
     ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
 except KeyError:
-    try:
-        # ローカル環境の場合
-        from config import ADMIN_PASSWORD
-    except ImportError:
-        st.error("""
-        設定ファイルが見つかりません。
-        1. config.example.py を config.py にコピー
-        2. config.py 内のパスワードを変更
-        してください。
-        """)
-        st.stop()
+    st.error("管理者パスワードが設定されていません。Streamlit CloudのSecretsに `ADMIN_PASSWORD` を設定してください。")
+    st.stop()
 
 # ページ設定
 st.set_page_config(
@@ -48,16 +39,7 @@ if 'random_strings' not in st.session_state:
 if 'current_index' not in st.session_state:
     st.session_state.current_index = 0
 
-# データベース接続関数
-
-
-def get_db_connection():
-    """データベース接続を取得する"""
-    if not os.path.exists('data'):
-        os.makedirs('data')
-    conn = sqlite3.connect('data/karuta.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+# データベース接続関数はdatabase.pyに移動したので削除
 
 
 def get_card_colors(string_id):
@@ -153,6 +135,7 @@ st.markdown("""
         line-height: 1.4;
         margin: 0;
         word-break: break-all;
+        white-space: pre-wrap; /* 改行を保持 */
     }
     
     /* 登録日時のスタイル */
@@ -222,303 +205,202 @@ with st.sidebar:
 
 def init_db():
     """データベースを初期化する"""
-    if not os.path.exists('data'):
-        os.makedirs('data')
-
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS strings
-        (id INTEGER PRIMARY KEY AUTOINCREMENT,
-         content TEXT NOT NULL,
-         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-    ''')
-    conn.commit()
-    conn.close()
-
-# 文字列の登録
+    db.init_db()
 
 
-def add_string(string_content):
-    """文字列を登録する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('INSERT INTO strings (content) VALUES (?)', (string_content,))
-    conn.commit()
-    conn.close()
-
-# 複数の文字列を一括登録
-
-
-def add_multiple_strings(string_list):
-    """複数の文字列を一括登録する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    for string_content in string_list:
-        if string_content and not string_content.isspace():  # 空文字列やスペースのみは除外
-            c.execute('INSERT INTO strings (content) VALUES (?)',
-                      (string_content,))
-    conn.commit()
-    conn.close()
-
-# 全ての文字列を取得
-
-
-def get_all_strings():
-    """全ての文字列を取得する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    result = c.execute(
-        'SELECT * FROM strings ORDER BY created_at DESC').fetchall()
-    conn.close()
-    return result
-
-# 全ての文字列をランダムな順序で取得
-
-
-def get_all_strings_random():
-    """全ての文字列をランダムな順序で取得する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    result = c.execute('SELECT * FROM strings').fetchall()
-    conn.close()
-    # リストに変換してシャッフル
-    result_list = [dict(s) for s in result]
-    random.shuffle(result_list)
-    return result_list
-
-# 文字列の削除
-
-
-def delete_string(string_id):
-    """指定されたIDの文字列を削除する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM strings WHERE id = ?', (string_id,))
-    conn.commit()
-    conn.close()
-
-# 全ての文字列を削除
-
-
-def delete_all_strings():
-    """全ての文字列を削除する"""
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute('DELETE FROM strings')
-    conn.commit()
-    conn.close()
-
-
-# データベースの初期化
+# データベース初期化を実行
 init_db()
 
-# ページ内容の表示
+# 文字列の登録、一括登録、取得、削除などの関数はdatabase.pyに移動したので削除
+
+# ページごとの処理
 if page == "ランダム表示":
-    st.header("ランダム表示")
+    st.subheader("ランダム表示")
 
-    col1, col2, col3 = st.columns([1, 3, 1])
+    # セッションにランダムな文字列リストがない場合は取得
+    if not st.session_state.random_strings:
+        df = db.get_all_strings_random()
+        if not df.empty:
+            st.session_state.random_strings = df.to_dict('records')
 
-    with col2:
-        if st.button("ランダム表示", key="random_button"):
-            # 新しいランダム配列を生成
-            strings = get_all_strings_random()
-            if strings:
-                st.session_state.random_strings = strings
-                st.session_state.current_index = 0
-            else:
-                st.warning("登録された文字列がありません。")
-                st.session_state.random_strings = []
-                st.session_state.current_index = 0
+    if st.button("🔄 新しい札を引く"):
+        df = db.get_all_strings_random()
+        if not df.empty:
+            st.session_state.random_strings = df.to_dict('records')
+            st.session_state.current_index = 0
+        else:
+            st.session_state.random_strings = []
+        st.rerun()
 
-    # ナビゲーションと文字列表示
     if st.session_state.random_strings:
-        current_string = st.session_state.random_strings[st.session_state.current_index]
-
-        # ナビゲーションボタンと文字列表示
-        col1, col2, col3 = st.columns([1, 4, 1])
-
-        with col1:
-            if st.button("＜", key="prev", disabled=st.session_state.current_index == 0):
-                st.session_state.current_index -= 1
-                st.rerun()
-
-        with col2:
-            colors = get_card_colors(current_string['id'])
-            st.markdown(
-                f"""
-                <div class="content-container">
-                    <div class="card" style="background-color: {colors['bg']};">
-                        <h2 style="color: {colors['text']};">
-                            {current_string['content']}
-                        </h2>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        with col3:
-            if st.button(
-                "＞",
-                key="next",
-                disabled=st.session_state.current_index == len(
-                    st.session_state.random_strings) - 1
-            ):
-                st.session_state.current_index += 1
-                st.rerun()
-
-        # 現在の位置を表示
         total = len(st.session_state.random_strings)
-        current = st.session_state.current_index + 1
+        st.session_state.current_index = min(
+            st.session_state.current_index, total - 1)
+
+        # ナビゲーション
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            if st.button("◀️ 前へ"):
+                st.session_state.current_index = (
+                    st.session_state.current_index - 1 + total) % total
+                st.rerun()
+        with col3:
+            if st.button("次へ ▶️"):
+                st.session_state.current_index = (
+                    st.session_state.current_index + 1) % total
+                st.rerun()
+
+        # 現在の文字列データを取得
+        string_data = st.session_state.random_strings[st.session_state.current_index]
+        content = string_data['content']
+        string_id = string_data['id']
+
+        # 色を決定
+        colors = get_card_colors(string_id)
+
+        # 文字列をカードで表示
         st.markdown(f"""
-        <div style='text-align: center'>
-            <span class='navigation-text'>{current} / {total}</span>
+        <div class="content-container">
+            <div class="card" style="background-color:{colors['bg']}; color:{colors['text']};">
+                <h2>{content}</h2>
+            </div>
+            <div class="navigation-text">
+                {st.session_state.current_index + 1} / {total}
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
+    else:
+        st.info("表示する文字列がありません。データを登録してください。")
+
+
 elif page == "文字列登録":
-    st.header("文字列登録")
+    st.subheader("文字列登録")
 
-    if not st.session_state.is_admin:
-        st.warning("この機能は管理者のみ使用できます。サイドバーからログインしてください。")
-    else:
-        # タブで個別登録とCSV登録を分ける
-        tab1, tab2 = st.tabs(["個別登録", "CSV一括登録"])
+    if st.session_state.is_admin:
+        with st.form("add_form", clear_on_submit=True):
+            new_string = st.text_area("新しい文字列を入力してください", height=150)
+            if st.form_submit_button("登録する"):
+                if new_string:
+                    db.add_string(new_string)
+                    st.success("文字列を登録しました！")
+                else:
+                    st.warning("文字列を入力してください。")
 
-        with tab1:
-            with st.form("string_form", clear_on_submit=True):
-                content = st.text_area("登録する文字列を入力してください", height=100)
-                submitted = st.form_submit_button("登録")
+        st.markdown("---")
+        st.subheader("CSVファイルから一括登録")
 
-                if submitted and content:
-                    add_string(content)
-                    st.success(f"「{content}」を登録しました！")
-                    st.balloons()
-                elif submitted:
-                    st.error("文字列を入力してください。")
+        with st.form("upload_form"):
+            uploaded_file = st.file_uploader(
+                "CSVファイルを選択 (UTF-8, Shift-JIS, CP932対応)", type=['csv'])
+            submit_button = st.form_submit_button("プレビュー")
 
-        with tab2:
-            st.markdown("""
-            ### CSV一括登録
-            
-            #### 📝 CSVファイルの形式
-            - 1行目：ヘッダー行（content）
-            - 2行目以降：登録する文字列（1行1文字列）
-            
-            #### 📄 CSVファイル例
-            ```
-            content
-            一つ目の文字列
-            二つ目の文字列
-            三つ目の文字列
-            ```
-            """)
+        if uploaded_file and submit_button:
+            try:
+                # 文字コードの自動判別
+                encodings = ['utf-8', 'shift-jis', 'cp932']
+                df = None
+                for enc in encodings:
+                    try:
+                        uploaded_file.seek(0)
+                        df = pd.read_csv(
+                            uploaded_file, header=None, encoding=enc)
+                        st.session_state.detected_encoding = enc
+                        break
+                    except Exception:
+                        continue
 
-            # CSVファイルのサンプルをダウンロードできるようにする
-            sample_csv = """content
-                        一つ目の文字列
-                        二つ目の文字列
-                        三つ目の文字列"""
-
-            st.download_button(
-                label="📥 サンプルCSVをダウンロード",
-                data=sample_csv.encode('shift-jis'),
-                file_name="sample_strings.csv",
-                mime="text/csv"
-            )
-
-            st.markdown("---")
-
-            # CSVファイルのアップロード
-            uploaded_file = st.file_uploader("CSVファイルを選択してください", type=['csv'])
-
-            if uploaded_file is not None:
-                try:
-                    # CSVファイルの文字コードを自動判定
-                    csv_data = uploaded_file.read()
-                    df = None
-                    encodings = ['utf-8', 'shift-jis', 'cp932']
-
-                    for encoding in encodings:
-                        try:
-                            df = pd.read_csv(io.BytesIO(
-                                csv_data), encoding=encoding)
-                            break
-                        except UnicodeDecodeError:
-                            continue
-
-                    if df is None:
-                        raise ValueError("サポートされている文字コードで読み込めませんでした。")
-
-                    if 'content' not in df.columns:
-                        raise ValueError("CSVファイルに'content'列が見つかりません。")
-
-                    # プレビューを表示
-                    st.write("📋 登録予定の文字列：")
+                if df is not None:
+                    st.session_state.dataframe_to_upload = df
+                    st.success(
+                        f"ファイルを読み込みました (文字コード: {st.session_state.detected_encoding})。")
+                    st.write("プレビュー:")
                     st.dataframe(df)
+                else:
+                    st.error("ファイルの読み込みに失敗しました。対応する文字コードのファイルか確認してください。")
 
-                    # 登録実行ボタン
-                    if st.button("一括登録を実行", type="primary"):
-                        # 空白行を除外して登録
-                        valid_strings = df['content'].dropna().tolist()
-                        add_multiple_strings(valid_strings)
-                        st.success(f"{len(valid_strings)}件の文字列を登録しました！")
-                        st.balloons()
+            except Exception as e:
+                st.error(f"エラーが発生しました: {e}")
 
-                except (pd.errors.EmptyDataError, ValueError) as e:
-                    st.error(f"CSVファイルの読み込みに失敗しました。エラー: {str(e)}")
-                    st.markdown("""
-                    #### 💡 よくあるエラーの解決方法
-                    1. CSVファイルの文字コードを確認してください（UTF-8推奨）
-                    2. ヘッダー行に'content'が含まれているか確認してください
-                    3. ファイルが破損していないか確認してください
-                    """)
-
-else:  # 一覧表示
-    st.header("登録済み文字列一覧")
-
-    strings = get_all_strings()
-    if strings:
-        # 一括削除ボタン（管理者のみ表示）
-        if st.session_state.is_admin:
-            col1, col2 = st.columns([3, 1])
-            with col2:
-                if st.button("🗑️ 一括削除", type="secondary"):
-                    # 確認ダイアログ
-                    if st.session_state.get('confirm_delete_all', False):
-                        delete_all_strings()
-                        st.success("全ての文字列を削除しました。")
-                        st.rerun()
+        if 'dataframe_to_upload' in st.session_state and not st.session_state.dataframe_to_upload.empty:
+            if st.button("この内容でデータベースに一括登録する"):
+                try:
+                    string_list = st.session_state.dataframe_to_upload.iloc[:, 0].dropna().astype(
+                        str).tolist()
+                    if string_list:
+                        db.add_multiple_strings(string_list)
+                        st.success(f"{len(string_list)}件の文字列を一括登録しました！")
                     else:
-                        st.session_state.confirm_delete_all = True
-                        st.warning("⚠️ 本当に全ての文字列を削除しますか？もう一度クリックすると削除されます。")
+                        st.warning("登録するデータがありません。")
+                except Exception as e:
+                    st.error(f"データベースへの登録中にエラーが発生しました: {e}")
+                finally:
+                    # 処理後にセッション状態をクリア
+                    del st.session_state.dataframe_to_upload
+                    if 'detected_encoding' in st.session_state:
+                        del st.session_state.detected_encoding
+                    st.rerun()
 
-            # キャンセルボタン（確認ダイアログ表示時のみ）
-            if st.session_state.get('confirm_delete_all', False):
-                with col1:
-                    if st.button("キャンセル"):
-                        st.session_state.confirm_delete_all = False
-                        st.rerun()
+        st.markdown("---")
+        st.markdown("##### サンプルCSV")
+        sample_df = pd.DataFrame(["一行目の内容", "二行目の内容", "三行目の内容"])
+        csv = sample_df.to_csv(index=False, header=False).encode('utf-8')
+        st.download_button(
+            label="サンプルCSVをダウンロード",
+            data=csv,
+            file_name="sample.csv",
+            mime="text/csv",
+        )
 
-        # 文字列一覧の表示
-        for string in strings:
-            with st.container():
-                col1, col2 = st.columns([5, 1])
-                colors = get_card_colors(string['id'])
-                with col1:
-                    st.markdown(f"""
-                    <div class="card" style="background-color: {colors['bg']};">
-                        <h2 style="color: {colors['text']};">{string['content']}</h2>
-                        <small>登録日時: {string['created_at']}</small>
-                    </div>
-                    """, unsafe_allow_html=True)
-                # 削除ボタン（管理者のみ表示）
-                if st.session_state.is_admin:
-                    with col2:
-                        if st.button("削除", key=f"delete_{string['id']}", type="secondary"):
-                            delete_string(string['id'])
-                            st.success("文字列を削除しました。")
-                            st.rerun()
     else:
-        st.info("登録された文字列がありません。")
+        st.warning("この機能は管理者専用です。")
+
+elif page == "一覧表示":
+    st.subheader("登録済み文字列一覧")
+
+    all_strings_df = db.get_all_strings()
+
+    if not all_strings_df.empty:
+        if st.session_state.is_admin:
+            # 管理者向け: 削除ボタン付き
+            st.info("削除したい項目がある場合は、IDを指定して削除してください。")
+            with st.form("delete_form"):
+                delete_id = st.number_input("削除するID", min_value=1, step=1)
+                if st.form_submit_button("🗑️ 指定したIDを削除"):
+                    try:
+                        db.delete_string(delete_id)
+                        st.success(f"ID:{delete_id}を削除しました。")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"削除中にエラーが発生しました: {e}")
+
+            if st.button("⚠️ すべてのデータを削除する"):
+                if 'confirm_delete_all' not in st.session_state:
+                    st.session_state.confirm_delete_all = True
+                    st.rerun()
+
+        if st.session_state.get('confirm_delete_all', False):
+            st.warning("本当によろしいですか？この操作は取り消せません。")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("はい、すべて削除します", type="primary"):
+                    db.delete_all_strings()
+                    st.success("すべてのデータを削除しました。")
+                    del st.session_state.confirm_delete_all
+                    st.rerun()
+            with col2:
+                if st.button("キャンセル"):
+                    del st.session_state.confirm_delete_all
+                    st.rerun()
+
+        st.markdown("---")
+        # DataFrameをHTMLに変換して表示
+        for index, row in all_strings_df.iterrows():
+            st.markdown(f"""
+            <div class="card">
+                ID: {row['id']} | 登録日時: {pd.to_datetime(row['created_at']).strftime('%Y-%m-%d %H:%M')}
+                <p style="font-size: 1.2em; margin-top: 5px;">{row['content']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("登録されている文字列はありません。")
