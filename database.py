@@ -11,7 +11,8 @@ def get_connection():
     """データベース接続を取得する"""
     # Streamlitの汎用SQL接続機能を使用し、Tursoデータベースに接続します。
     # 接続情報は .streamlit/secrets.toml から自動的に読み込まれます。
-    return st.connection("turso", type="sql")
+    # dialectを明示的に指定することで、読み込みエラーを回避します。
+    return st.connection("turso", type="sql", dialect="libsql")
 
 # データベースのテーブルを初期化
 
