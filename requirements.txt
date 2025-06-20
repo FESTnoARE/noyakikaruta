@@ -1,3 +1,4 @@
-streamlit
-pandas
-sqlalchemy-libsql
+streamlit==1.36.0
+pandas==2.2.2
+sqlalchemy-libsql==0.4.0
+sqlalchemy==2.0.31
