@@ -374,21 +374,21 @@ elif page == "一覧表示":
                     except Exception as e:
                         st.error(f"削除中にエラーが発生しました: {e}")
 
-            if st.button("⚠️ すべてのデータを削除する"):
+            st.markdown("---")
+            st.subheader("⚠️ すべてのデータを削除")
+            if st.button("すべてのデータを削除する", type="primary"):
                 if 'confirm_delete_all' not in st.session_state:
                     st.session_state.confirm_delete_all = True
                     st.rerun()
-
-        if st.session_state.get('confirm_delete_all', False):
-            st.warning("本当によろしいですか？この操作は取り消せません。")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("はい、すべて削除します", type="primary"):
+                # 2回目に押されたら削除を実行
+                else:
                     db.delete_all_strings()
-                    st.success("すべてのデータを削除しました。")
                     del st.session_state.confirm_delete_all
+                    st.success("すべてのデータを削除しました。")
                     st.rerun()
-            with col2:
+
+            if st.session_state.get('confirm_delete_all'):
+                st.warning("本当によろしいですか？この操作は取り消せません。もう一度上のボタンを押すと削除が実行されます。")
                 if st.button("キャンセル"):
                     del st.session_state.confirm_delete_all
                     st.rerun()
