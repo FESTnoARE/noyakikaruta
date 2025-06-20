@@ -9,8 +9,8 @@ import pandas as pd
 def get_connection():
     """データベース接続を取得する"""
     # Tursoデータベースに接続
-    # 接続情報はStreamlitのSecretsから自動で読み込まれる
-    return st.connection("turso", type="sql")
+    # 接続URLはStreamlitのSecretsから自動で読み込まれる
+    return st.connection("turso", type="sql", url=st.secrets.connections.turso.url)
 
 # データベースのテーブルを初期化
 

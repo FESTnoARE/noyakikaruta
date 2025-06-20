@@ -6,7 +6,7 @@
 ## 技術スタック
 - フレームワーク：Streamlit
 - バックエンド：Python 3.8+
-- データベース：Turso (Cloud SQLite)
+- データベース：Turso (via sqlalchemy-libsql)
 - デプロイ：Streamlit Cloud
 - ホスティング：GitHub
 
@@ -54,7 +54,7 @@
 4. **シークレット設定**
    - Streamlit Cloudのアプリケーション管理画面で「Settings」>「Secrets」に以下の内容を貼り付けます。
    - `your_secure_password` は任意の管理者パスワードに置き換えてください。
-   - `url` と `authToken` には、上で取得したTursoの情報を設定します。
+   - `url` には、TursoのURLと認証トークンを `?authToken=` で連結したものを設定します。
 
    ```toml
    # .streamlit/secrets.toml
@@ -64,47 +64,8 @@
 
    # Tursoデータベース接続情報
    [connections.turso]
-   url = "libsql://your-database-name.turso.io"
-   authToken = "your-long-auth-token"
+   url = "libsql://your-database-name.turso.io?authToken=your-long-auth-token"
    ```
 
 ### プロジェクトディレクトリ構成
 ```
-noyakikaruta/
-├── app.py              # メインアプリケーション
-├── database.py         # データベース操作モジュール
-├── requirements.txt    # 依存パッケージ
-├── .gitignore         # Git除外設定
-└── .streamlit/
-    └── secrets.toml    # (Streamlit Cloud上で管理)
-```
-
-### セキュリティ対策
-1. 設定管理
-   - 機密情報（DB接続情報、管理者パスワード）はStreamlit Cloudのシークレットで管理
-   - 設定ファイルのテンプレート化
-
-2. アクセス制御
-   - 管理者機能のパスワード保護
-   - 文字列登録・削除の権限管理
-
-3. データ保護
-   - データベースへの直接アクセスを制限
-   - 機密情報をコードから分離
-
-### 今後の改善点
-1. 機能追加
-   - 文字列の編集機能
-   - タグ付け機能
-   - 検索機能
-
-2. UI/UX改善
-   - アニメーション効果の追加
-   - テーマカスタマイズ
-   - 表示レイアウトの多様化
-
-3. 運用管理
-   - バックアップ機能
-   - 利用統計の収集
-   - エラーログの管理
-
