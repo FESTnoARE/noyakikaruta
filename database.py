@@ -1,5 +1,10 @@
 import streamlit as st
 import pandas as pd
+import sqlalchemy
+from sqlalchemy import text
+
+# sqlalchemy-libsqlをインポートすることで、SQLAlchemyに 'libsql' dialectを登録します。
+# これにより、create_engineが 'libsql://' で始まるURLを解釈できるようになります。
 import sqlalchemy_libsql
 
 # StreamlitのConnection機能を利用してデータベース接続を管理
@@ -8,62 +13,65 @@ import sqlalchemy_libsql
 
 @st.cache_resource
 def get_connection():
-    """データベース接続を取得する"""
-    # Streamlitの汎用SQL接続機能を使用し、Tursoデータベースに接続します。
-    # 接続情報は .streamlit/secrets.toml から自動的に読み込まれます。
-    # dialectを明示的に指定することで、読み込みエラーを回避します。
-    return st.connection("turso", type="sql", dialect="libsql")
+    """データベース接続用のSQLAlchemy Engineを取得する"""
+    try:
+        url = st.secrets["connections"]["turso"]["url"]
+        token = st.secrets["connections"]["turso"]["token"]
+    except KeyError:
+        st.error("Tursoの接続情報（url, token）が .streamlit/secrets.toml に正しく設定されていません。")
+        st.stop()
+
+    # sqlalchemy-libsql用の接続URLを構築します
+    # フォーマット: libsql://<hostname>/?authToken=<token>
+    full_url = f"{url}?authToken={token}"
+
+    return sqlalchemy.create_engine(full_url)
 
 # データベースのテーブルを初期化
 
 
 def init_db():
     """データベースを初期化する"""
-    conn = get_connection()
-    with conn.session as s:
-        # "strings"テーブルが存在しない場合のみ作成
-        # SQLiteでは `SERIAL PRIMARY KEY` の代わりに `INTEGER PRIMARY KEY AUTOINCREMENT` を使用
-        # `TIMESTAMP WITH TIME ZONE` は `DATETIME` に変更
-        s.execute('''
+    engine = get_connection()
+    with engine.begin() as conn:
+        conn.execute(text('''
             CREATE TABLE IF NOT EXISTS strings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
-        ''')
-        s.commit()
+        '''))
 
 # 単一の文字列をデータベースに追加
 
 
 def add_string(string_content: str):
     """文字列を登録する"""
-    conn = get_connection()
-    with conn.session as s:
-        # パラメータ化クエリでSQLインジェクションを防止
-        s.execute('INSERT INTO strings (content) VALUES (?)',
-                  (string_content,))
-        s.commit()
+    engine = get_connection()
+    with engine.begin() as conn:
+        conn.execute(
+            text('INSERT INTO strings (content) VALUES (:content)'),
+            {"content": string_content}
+        )
 
 # 複数の文字列をリストから一括で追加
 
 
 def add_multiple_strings(string_list: list[str]):
     """複数の文字列を一括登録する"""
-    conn = get_connection()
-    # Pandas DataFrameに変換してからSQLに書き込むことで高速化
+    engine = get_connection()
     df = pd.DataFrame(string_list, columns=["content"])
-    # `to_sql`は内部で効率的な一括挿入を行う
-    df.to_sql('strings', conn.engine, if_exists='append', index=False)
+    df.to_sql('strings', engine, if_exists='append', index=False)
 
 # 登録されているすべての文字列を取得
 
 
 def get_all_strings():
     """すべての文字列を登録日時が新しい順に取得する"""
-    conn = get_connection()
-    # `conn.query`はクエリ結果をPandas DataFrameとして返す
-    df = conn.query('SELECT * FROM strings ORDER BY created_at DESC;')
+    engine = get_connection()
+    with engine.connect() as conn:
+        df = pd.read_sql(
+            'SELECT * FROM strings ORDER BY created_at DESC;', conn)
     return df
 
 # 登録されているすべての文字列をランダムな順序で取得
@@ -71,9 +79,9 @@ def get_all_strings():
 
 def get_all_strings_random():
     """すべての文字列をランダムな順序で取得する"""
-    conn = get_connection()
-    # SQLiteのRANDOM()関数でランダムな並び替えを実現
-    df = conn.query('SELECT * FROM strings ORDER BY RANDOM();')
+    engine = get_connection()
+    with engine.connect() as conn:
+        df = pd.read_sql('SELECT * FROM strings ORDER BY RANDOM();', conn)
     return df
 
 # 指定したIDの文字列を削除
@@ -81,20 +89,19 @@ def get_all_strings_random():
 
 def delete_string(string_id: int):
     """指定されたIDの文字列を削除する"""
-    conn = get_connection()
-    with conn.session as s:
-        s.execute('DELETE FROM strings WHERE id = ?', (string_id,))
-        s.commit()
+    engine = get_connection()
+    with engine.begin() as conn:
+        conn.execute(
+            text('DELETE FROM strings WHERE id = :id'),
+            {"id": string_id}
+        )
 
 # すべての文字列を削除
 
 
 def delete_all_strings():
     """すべての文字列を削除する"""
-    conn = get_connection()
-    with conn.session as s:
-        # SQLiteではTRUNCATE TABLEの代わりにDELETE FROMを使用
-        s.execute('DELETE FROM strings;')
-        # VACUUMで空き領域を解放（任意）
-        s.execute('VACUUM;')
-        s.commit()
+    engine = get_connection()
+    with engine.begin() as conn:
+        conn.execute(text('DELETE FROM strings;'))
+        conn.execute(text('VACUUM;'))
